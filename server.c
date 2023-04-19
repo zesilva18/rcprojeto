@@ -14,7 +14,7 @@ void add_user(const char *name, const char *password, const char *role) {
     strncpy(new_user->password, password, TAM);
     strncpy(new_user->role, role, TAM);
     new_user->next = NULL;
-    
+
     if (shm->head == NULL) {
         shm->head = new_user;
     } else {
@@ -59,27 +59,36 @@ int find_user(const char *name) {
     return 0;
 }
 
+//funtion to search a user name and password, see if role == administrator and return boolean
 
-void getconfig(const char *configfile)
-{
-    //get on config.txt and save on struct shm the values 
+bool loginCheck(const char *name, const char *password) {
+    user *current = shm->head;
+    while (current != NULL) {
 
-    //open file
+        if (strcmp(current->name, name) == 0 && strcmp(current->password, password) == 0 && strncmp(current->role, "admin", strlen("admin")) == 0) {
+            return true;
+        }
+        current = current->next;
+    }
+    return false;
+}
 
-    FILE* fp = fopen(configfile, "r");
-    
+void getconfig(const char *configfile) {
+    // get on config.txt and save on struct shm the values
+
+    // open file
+
+    FILE *fp = fopen(configfile, "r");
+
     if (fp == NULL) {
         perror("Error opening file");
         exit(EXIT_FAILURE);
     }
 
-    
     char line[MAX_LINE_LENGTH];
     size_t len = 0;
     ssize_t read;
 
-    
-    
     while (fgets(line, MAX_LINE_LENGTH, fp) != NULL) {
         char *name, *password, *role;
         // Use strtok to split the line into name, password, and role
@@ -88,34 +97,28 @@ void getconfig(const char *configfile)
         role = strtok(NULL, "\n");
         // Only print lines that contain all three elements
 
-        //printf("aqui");
+        // printf("aqui");
 
         add_user(name, password, role);
-        
     }
-    
-
 }
 
-void printSharedMemory(){
-    //print shared memory
+void printSharedMemory() {
+    // print shared memory
     printf("USERS DISPONIVEIS:\n");
     user *aux = shm->head;
-    while(aux != NULL){
+    while (aux != NULL) {
         printf("name: %s password: %s role: %s\n", aux->name, aux->password, aux->role);
         aux = aux->next;
     }
 }
 
-void erro(char *s)
-{
+void erro(char *s) {
     perror(s);
     exit(1);
 }
 
-
-int main(void)
-{
+int main(void) {
     int sockfd;
 
     struct sockaddr_in si_minha, si_outra, dest_addr;
@@ -123,16 +126,15 @@ int main(void)
     int s, recv_len;
     socklen_t slen = sizeof(si_outra);
     char buf[BUFLEN];
-    
 
-    //init shared memory
-    if ((shmid = shmget(IPC_PRIVATE, sizeof(shared_memory) + sizeof(user)*20, IPC_CREAT | 0777)) < 0) { 
+    // init shared memory
+    if ((shmid = shmget(IPC_PRIVATE, sizeof(shared_memory) + sizeof(user) * 20, IPC_CREAT | 0777)) < 0) {
         perror("shmget");
         exit(1);
     }
 
-    //attach shared memory
-    if ((shm = (shared_memory *)shmat(shmid, NULL, 0)) == (shared_memory *) -1) {
+    // attach shared memory
+    if ((shm = (shared_memory *)shmat(shmid, NULL, 0)) == (shared_memory *)-1) {
         perror("shmat");
         exit(1);
     }
@@ -145,7 +147,7 @@ int main(void)
 
     getconfig("config.txt");
 
-    //printSharedMemory();
+    printSharedMemory();
 
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0) {
@@ -154,11 +156,10 @@ int main(void)
     }
 
     // Cria um socket para recepção de pacotes UDP
-    if ((s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
-    {
+    if ((s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
         erro("Erro na criação do socket");
     }
-    //printf("\nMenu:\nADD_USER {username} {password}\nDEL {username}\nLIST\nQUIT\nQUIT_SERVER\n\n");
+    // printf("\nMenu:\nADD_USER {username} {password}\nDEL {username}\nLIST\nQUIT\nQUIT_SERVER\n\n");
     printf("Bem vindo ao servidor\n");
 
     memset(&dest_addr, 0, sizeof(dest_addr));
@@ -171,148 +172,138 @@ int main(void)
     si_minha.sin_port = htons(PORT);
     si_minha.sin_addr.s_addr = htonl(INADDR_ANY);
 
-
     // Associa o socket à informação de endereço
-    if (bind(s, (struct sockaddr *)&si_minha, sizeof(si_minha)) == -1)
-    {
+    if (bind(s, (struct sockaddr *)&si_minha, sizeof(si_minha)) == -1) {
         erro("Erro no bind");
     }
 
-    // bool login = true;
+    bool login = false;
 
-    // while (login)
-
-    while (1)
-    {
-
-        //printf("\nMenu\nADD_USER {username} {password} {role}\nDEL {username}\nLIST\nQUIT\nQUIT_SERVER\n\n",inet_ntoa(si_outra.sin_addr), ntohs(si_outra.sin_port));
-        
-        char* msg = "ola\n";
-        
-        sendto(s, "\nMenu\nADD_USER {username} {password} {role}\nDEL {username}\nLIST\nQUIT\nQUIT_SERVER\n\n", strlen("\nMenu\nADD_USER {username} {password} {role}\nDEL {username}\nLIST\nQUIT\nQUIT_SERVER\n\n"), 0, (struct sockaddr *)&si_outra, slen);
- 
+    while (1) {
+        // printf("\nMenu\nADD_USER {username} {password} {role}\nDEL {username}\nLIST\nQUIT\nQUIT_SERVER\n\n",inet_ntoa(si_outra.sin_addr), ntohs(si_outra.sin_port));
 
         // Espera recepção de mensagem (a chamada é bloqueante)
-        if ((recv_len = recvfrom(s, buf, BUFLEN, 0, (struct sockaddr *)&si_outra, (socklen_t *)&slen)) == -1)
-        {
+        if ((recv_len = recvfrom(s, buf, BUFLEN, 0, (struct sockaddr *)&si_outra, (socklen_t *)&slen)) == -1) {
             erro("Erro no recvfrom");
         }
         // Para ignorar o restante conteúdo (anterior do buffer)
 
         buf[recv_len] = '\0';
-        //printf("Recebido = %s", buf);
+        // printf("Recebido = %s", buf);
         char bufInstructions[NPARAMETERS][TAM];
         int aux = 0;
 
         char *token = strtok(buf, " ");
 
-        while (token != NULL)
-        {
-            strcpy(bufInstructions[aux], token);
-            aux++;
-            //print token
-            token = strtok(NULL, " ");
+        if (!login) {
+            while (token != NULL) {
+                strcpy(bufInstructions[aux], token);
+                aux++;
+                // print token
+                token = strtok(NULL, " ");
+            }
+            sendto(s, "Escreva username password: \n", strlen("Escreva username password: \n"), 0, (struct sockaddr *)&si_outra, slen);
+            //print aux
+            printf("aux = %d\n", aux);
+            if(aux == 2){
 
-        }
-        if (strcmp(bufInstructions[0], "ADD_USER") == 0)
-        {
-            //printf("aux = %d", aux);
-            if (aux == 4)
-            {
-                printf("Adicionando um novo user com o nome %s, password %s role %s\n", bufInstructions[1], bufInstructions[2], bufInstructions[3]);
-                bufInstructions[3][strlen(bufInstructions[3]) - 1] = '\0';
-                add_user(bufInstructions[1], bufInstructions[2], bufInstructions[3]);
-                sendto(s, "User adicionado com sucesso\n", strlen("User adicionado com sucesso\n"), 0, (struct sockaddr *)&si_outra, slen);
-            }
-            else
-            {
-                printf("ERRO!!!\nUtilize o comando (ADD_USER) com a seguinte formatação ---> ADD_USER {username} {password}\n");
-            }
-        }
-        else if (strcmp(bufInstructions[0], "DEL") == 0)
-        {
-            //printf("aux = %d", aux);
-            if (aux == 2)
-            {
-                int user = 0;
-                //printf("Apagando user %s\n", bufInstructions[1]);
                 bufInstructions[1][strlen(bufInstructions[1]) - 1] = '\0';
-                user = find_user(bufInstructions[1]);
-                if (user == 0)
-                {
-                    sendto(s, "User nao encontrado\n", strlen("User nao encontrado\n"), 0, (struct sockaddr *)&si_outra, slen);
-                }
-                else
-                {
-                    sendto(s, "User apagado\n", strlen("User apagado\n"), 0, (struct sockaddr *)&si_outra, slen);
-                    remove_user(bufInstructions[1]);
-                }
-                
-            }
-            else
-            {
-                printf("ERRO!!!\nUtilize o comando (DEL) com a seguinte formatação ---> DEL {username}\n");
-            }
-        }
-        else if (strcmp(bufInstructions[0], "LIST\n") == 0)
-        {
-            //printf("aux = %d\n", aux);
-            if (aux == 1)
-            {
-                
-                sendto(s, "USERS DISPONIVEIS: " , strlen("USERS DISPONIVEIS: "), 0, (struct sockaddr *)&si_outra, slen);
+                printf("%s\n", bufInstructions[0]);
+                printf("%s\n", bufInstructions[1]);
 
-                user *aux = shm->head;
-                while(aux != NULL){
-                    
-                    
-                    sendto(s, " NOME: " , strlen(" NOME: "), 0, (struct sockaddr *)&si_outra, slen);
-                    sendto(s, aux->name , strlen(aux->name), 0, (struct sockaddr *)&si_outra, slen);
-                    sendto(s, " PASSWORD: " , strlen(" PASSWORD: "), 0, (struct sockaddr *)&si_outra, slen);
-                    sendto(s, aux ->password , strlen(aux->password), 0, (struct sockaddr *)&si_outra, slen);
-                    sendto(s, " ROLE: " , strlen(" ROLE: "), 0, (struct sockaddr *)&si_outra, slen);
-                    sendto(s, aux->role , strlen(aux->role), 0, (struct sockaddr *)&si_outra, slen);
-                    sendto(s, "\n", strlen("\n"), 0, (struct sockaddr *)&si_outra, slen);
-                    
-                    aux = aux->next;
-
+                if(loginCheck(bufInstructions[0], bufInstructions[1])){
+                    sendto(s, "Login efetuado com sucesso\n", strlen("Login efetuado com sucesso\n"), 0, (struct sockaddr *)&si_outra, slen);
+                    login = true;
+                } else {
+                    sendto(s, "Login errado\n", strlen("Login errado\n"), 0, (struct sockaddr *)&si_outra, slen);
                 }
             }
-            else
-            {
-                printf("ERRO!!!\nUtilize o comando (LIST) com a seguinte formatação ---> LIST\n");
-            }
         }
-        else if (strcmp(bufInstructions[0], "QUIT\n") == 0)
-        {
-            //printf("aux = %d", aux);
-            if (aux == 1)
-            {
-                printf("Desligando do cliente\n");
-            }
-            else
-            {
-                printf("ERRO!!!\nUtilize o comando (QUIT) com a seguinte formatação ---> QUIT\n");
-            }
-        }
-        else if (strcmp(bufInstructions[0], "QUIT_SERVER\n") == 0)
-        {
-            //printf("aux = %d", aux);
-            if (aux == 1)
-            {
-                printf("A sair do servidor\n");
+        
+        
+        if (login) {
 
-                return 0;
+            while (token != NULL) {
+                strcpy(bufInstructions[aux], token);
+                aux++;
+                // print token
+                token = strtok(NULL, " ");
             }
-            else
-            {
-                printf("ERRO!!!\nUtilize o comando (QUIT_SERVER) com a seguinte formatação ---> QUIT_SERVER\n");
+
+            if (strcmp(bufInstructions[0], "ADD_USER") == 0) {
+                // printf("aux = %d", aux);
+                if (aux == 4) {
+                    printf("Adicionando um novo user com o nome %s, password %s role %s\n", bufInstructions[1], bufInstructions[2], bufInstructions[3]);
+                    bufInstructions[3][strlen(bufInstructions[3]) - 1] = '\0';
+                    add_user(bufInstructions[1], bufInstructions[2], bufInstructions[3]);
+                    sendto(s, "User adicionado com sucesso\n", strlen("User adicionado com sucesso\n"), 0, (struct sockaddr *)&si_outra, slen);
+                } else {
+                    printf("ERRO!!!\nUtilize o comando (ADD_USER) com a seguinte formatação ---> ADD_USER {username} {password}\n");
+                }
+            } else if (strcmp(bufInstructions[0], "DEL") == 0) {
+                // printf("aux = %d", aux);
+                if (aux == 2) {
+                    int user = 0;
+                    // printf("Apagando user %s\n", bufInstructions[1]);
+                    bufInstructions[1][strlen(bufInstructions[1]) - 1] = '\0';
+                    user = find_user(bufInstructions[1]);
+                    if (user == 0) {
+                        sendto(s, "User nao encontrado\n", strlen("User nao encontrado\n"), 0, (struct sockaddr *)&si_outra, slen);
+                    } else {
+                        sendto(s, "User apagado\n", strlen("User apagado\n"), 0, (struct sockaddr *)&si_outra, slen);
+                        remove_user(bufInstructions[1]);
+                    }
+
+                } else {
+                    printf("ERRO!!!\nUtilize o comando (DEL) com a seguinte formatação ---> DEL {username}\n");
+                }
+            } else if (strcmp(bufInstructions[0], "LIST\n") == 0) {
+                // printf("aux = %d\n", aux);
+                if (aux == 1) {
+                    sendto(s, "USERS DISPONIVEIS: \n", strlen("USERS DISPONIVEIS: \n"), 0, (struct sockaddr *)&si_outra, slen);
+
+                    user *aux = shm->head;
+                    while (aux != NULL) {
+                        sendto(s, "NOME: ", strlen("NOME: "), 0, (struct sockaddr *)&si_outra, slen);
+                        sendto(s, aux->name, strlen(aux->name), 0, (struct sockaddr *)&si_outra, slen);
+                        sendto(s, " PASSWORD: ", strlen(" PASSWORD: "), 0, (struct sockaddr *)&si_outra, slen);
+                        sendto(s, aux->password, strlen(aux->password), 0, (struct sockaddr *)&si_outra, slen);
+                        sendto(s, " ROLE: ", strlen(" ROLE: "), 0, (struct sockaddr *)&si_outra, slen);
+                        sendto(s, aux->role, strlen(aux->role), 0, (struct sockaddr *)&si_outra, slen);
+                        sendto(s, "\n", strlen("\n"), 0, (struct sockaddr *)&si_outra, slen);
+
+                        aux = aux->next;
+                    }
+                } else {
+                    printf("ERRO!!!\nUtilize o comando (LIST) com a seguinte formatação ---> LIST\n");
+                }
+            } else if (strcmp(bufInstructions[0], "QUIT\n") == 0) {
+                // printf("aux = %d", aux);
+                if (aux == 1) {
+                    printf("Desligando do cliente\n");
+                    login = false;
+                } else {
+                    printf("ERRO!!!\nUtilize o comando (QUIT) com a seguinte formatação ---> QUIT\n");
+                }
+            } else if (strcmp(bufInstructions[0], "QUIT_SERVER\n") == 0) {
+                // printf("aux = %d", aux);
+                if (aux == 1) {
+                    printf("A sair do servidor\n");
+
+                    return 0;
+                } else {
+                    printf("ERRO!!!\nUtilize o comando (QUIT_SERVER) com a seguinte formatação ---> QUIT_SERVER\n");
+                }
             }
+            if(login){
+                 sendto(s, "\nMenu\nADD_USER {username} {password} {role}\nDEL {username}\nLIST\nQUIT\nQUIT_SERVER\n\n", strlen("\nMenu\nADD_USER {username} {password} {role}\nDEL {username}\nLIST\nQUIT\nQUIT_SERVER\n\n"), 0, (struct sockaddr *)&si_outra, slen);
+            }
+           
+
         }
-        //printf("\nMenu\nADD_USER {username} {password}\nDEL {username}\nLIST\nQUIT\nQUIT_SERVER\n\n");
     }
+
     // Fecha socket e termina programa
     close(s);
     close(sockfd);
-
 }
