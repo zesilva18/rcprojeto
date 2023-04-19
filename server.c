@@ -178,6 +178,10 @@ int main(void)
         erro("Erro no bind");
     }
 
+    // bool login = true;
+
+    // while (login)
+
     while (1)
     {
 
@@ -185,7 +189,7 @@ int main(void)
         
         char* msg = "ola\n";
         
-        sendto(s, msg, strlen(msg), 0, (struct sockaddr *)&si_outra, slen);
+        sendto(s, "\nMenu\nADD_USER {username} {password} {role}\nDEL {username}\nLIST\nQUIT\nQUIT_SERVER\n\n", strlen("\nMenu\nADD_USER {username} {password} {role}\nDEL {username}\nLIST\nQUIT\nQUIT_SERVER\n\n"), 0, (struct sockaddr *)&si_outra, slen);
  
 
         // Espera recepção de mensagem (a chamada é bloqueante)
