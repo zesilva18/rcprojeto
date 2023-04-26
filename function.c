@@ -37,6 +37,10 @@ void tcpConextion(){
 
 }
 
+void process_leitor(int client_fd){
+    
+}
+
 void process_client(int client_fd)
 {
 

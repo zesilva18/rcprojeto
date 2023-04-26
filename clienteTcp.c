@@ -1,6 +1,74 @@
 #include "header.h"
 
 
+void menuLeitor(int fd) {
+    //print menu of leitor is like 
+}
+
+void menuJornalista(int fd) {
+    int option = 0;
+
+    while (option != 5){
+
+        printf("===== MENU JORNALISTA =====\n");
+        printf("1 - Listar Topicos\n");
+        printf("2 - Subscrever Topico\n");
+        printf("3 - Criar Topico\n");
+        printf("4 - Send Noticia\n");
+        printf("5 - Logout\n");
+
+        scanf("%d", &option);
+
+        if (option == 1) {
+            write(fd, "LIST", sizeof("LIST"));
+        }else if (option == 2) {
+            write(fd, "SUBS", sizeof("SUBS"));
+            //subscrever topico
+
+        }else if (option == 3) {
+            write(fd, "CRT", sizeof("CRT"));
+                //criar topico
+
+            printf("Insira o id do topico: ");
+
+            char idTopico[1024];
+
+            scanf("%s", idTopico);
+
+            write(fd, idTopico, sizeof(idTopico));
+
+            printf("Insira o titulo do topico: ");
+
+            char tituloTopico[1024];
+
+            scanf("%s", tituloTopico);
+
+            write(fd, tituloTopico, sizeof(tituloTopico));
+
+            printf("IDTOPICO = %s\n", idTopico);
+            printf("TITULOTOPICO = %s\n", tituloTopico);
+
+            
+
+        }else if (option == 4) {
+            write(fd, "SND", sizeof("SND"));
+                //send noticia
+        }else if (option == 5) {
+            //logou
+            write(fd, "EXIT", sizeof("EXIT"));
+        }
+        if (option == 5) {
+            break;
+        }  
+
+    }
+
+
+    
+
+
+}
+
 void menu(int fd){
 
     int option = 0;
@@ -53,9 +121,17 @@ void menu(int fd){
         nread = read(fd, buffer, sizeof(buffer));
         printf("buffer = %s\n", buffer);
 
-        if (strncmp(buffer, "LOGIN BEM SUCEDIDO", strlen("LOGIN BEM SUCEDIDO")) == 0) {
-            // Login mal sucedido
+        if (strncmp(buffer, "leitor", strlen("leitor")) == 0) {
+            printf("Login feito com sucesso como leitor!\n");
             break;
+        } else if (strncmp(buffer, "jornalista", strlen("jornalista")) == 0){
+            printf("Login feito com sucesso como jornalista!\n");
+            menuJornalista(fd);
+            break;
+        } else if (strncmp(buffer, "LOGIN MAL SUCEDIDO", strlen("LOGIN MAL SUCEDIDO") == 0)){
+            printf("Login mal sucedido!\n");
+        } else {
+            printf("Erro no login!\n");
         }
 
     }

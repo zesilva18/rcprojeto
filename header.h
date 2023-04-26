@@ -31,7 +31,7 @@
 #define PORT 9876   // Port
 #define BUFLEN 1024 // Buffer size
 #define NPARAMETERS 10
-#define MAXUSERS 20
+#define MAXUSERS 100
 #define MAX_LINE_LENGTH 256
 
 //create struct with name, password and role
@@ -40,16 +40,20 @@ typedef struct user{
     char name[TAM];
     char password[TAM];
     char role[TAM];
-    struct user *next;
 } user;
+
+typedef struct topico{
+    char id[TAM];
+    char titulo[TAM];
+} topico;
 
 //create lista ligada de users 
 
 typedef struct {
 
-    user *head;
+    user users[MAXUSERS];
+    topico topicos[MAXUSERS];
 
-    
 } shared_memory;
 
 extern int shmid;

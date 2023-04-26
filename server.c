@@ -1,117 +1,154 @@
 #include "header.h"
 
 int shmid;
-shared_memory *shm;
 sem_t *semshmid;
+shared_memory *shm;
 
 int PORT_CONFIG; // colocar 9876 --concexao udp
 int PORT_NOTICIAS; //colocar 9000
 
-void add_user(const char *name, const char *password, const char *role) {
-    sem_wait(semshmid);
-    user *new_user = malloc(sizeof(user));
-    if (new_user == NULL) {
-        fprintf(stderr, "Error: out of memory\n");
-        sem_post(semshmid);
+void terminate(){
+
+    if (shmdt(shm) < 0) {
+        perror("shmdt");
         exit(1);
     }
-    strncpy(new_user->name, name, TAM);
-    strncpy(new_user->password, password, TAM);
-    strncpy(new_user->role, role, TAM);
-    new_user->next = NULL;
 
-    if (shm->head == NULL) {
-        shm->head = new_user;
-    } else {
-        user *current = shm->head;
-        while (current->next != NULL) {
-            current = current->next;
-        }
-        current->next = new_user;
+    // remove shared memory
+
+    if (shmctl(shmid, IPC_RMID, NULL) < 0) {
+        perror("shmctl");
+        exit(1);
     }
 
-    sem_post(semshmid);
+    // remove semaphore
+
+    if (sem_close(semshmid) < 0) {
+        perror("sem_close");
+        exit(1);
+    }
+
+    if (sem_unlink("SEM_SHM") < 0) {
+        perror("sem_unlink");
+        exit(1);
+    }
+
 }
 
-// funtion to remove user from shared memory
 
-void remove_user(const char *name) {
+void erro(char *s) {
+    perror(s);
+    exit(1);
+}
+
+bool loginCheck(const char *name, const char *password){
+
+    //function to check if the user is in the shared memory, check if name and password are correct and return true or false
+
     sem_wait(semshmid);
-    user *current = shm->head;
-    user *previous = NULL;
-    while (current != NULL) {
-        if (strcmp(current->name, name) == 0) {
-            if (previous == NULL) {
-                shm->head = current->next;
-            } else {
-                previous->next = current->next;
-            }
-            free(current);
+
+    int index = -1;
+    for (int i = 0; i < MAXUSERS; i++) {
+        if (strcmp(shm->users[i].name, name) == 0 && strcmp(shm->users[i].password, password) == 0 && strcmp(shm->users[i].role, "admin") == 0) {
+            index = i;
+            //printf("LOGIN FEITO\n");
             sem_post(semshmid);
-            return;
+            return true;
         }
-        previous = current;
-        current = current->next;
     }
+
+    if (index == -1) {
+        // User not found
+        printf("Error: User not found\n");
+        sem_post(semshmid);
+        return false;
+    }
+
     sem_post(semshmid);
+    
+    
 }
 
-// function to find a user name in shared memory if exist return boolean
+void delete_user(const char *name) {
+
+    sem_wait(semshmid);
+
+    // Find the user with the given name
+    int index = -1;
+    for (int i = 0; i < MAXUSERS; i++) {
+        if (strcmp(shm->users[i].name, name) == 0) {
+            index = i;
+            break;
+        }
+    }
+
+    if (index == -1) {
+        // User not found
+        fprintf(stderr, "Error: User not found\n");
+        return;
+    }
+
+    // Remove the user from the users array
+    shm->users[index].name[0] = '\0';
+
+    sem_post(semshmid);
+}
 
 int find_user(const char *name) {
+
     sem_wait(semshmid);
-    user *current = shm->head;
-    while (current != NULL) {
-        if (strcmp(current->name, name) == 0) {
+
+    // Find the user with the given name
+    int index = -1;
+    for (int i = 0; i < MAXUSERS; i++) {
+        if (strcmp(shm->users[i].name, name) == 0) {
+            index = i;
+            printf("User found\n");
             sem_post(semshmid);
             return 1;
         }
-        current = current->next;
     }
-    sem_post(semshmid);
-    return 0;
-}
-//funtion to search a user name and password, see if role == administrator and return boolean
-bool loginCheck(const char *name, const char *password) {
-    sem_wait(semshmid);
-    user *current = shm->head;
-    while (current != NULL) {
 
-        if (strcmp(current->name, name) == 0 && strcmp(current->password, password) == 0 && strncmp(current->role, "admin", strlen("admin")) == 0) {
-            sem_post(semshmid);
-            return true;
-        }
-        current = current->next;
+    if (index == -1) {
+        // User not found
+        printf("Error: User not found\n");
+        sem_post(semshmid);
+        return 0;
     }
+
     sem_post(semshmid);
-    return false;
+
+    
 }
 
-bool loginCheckUser(const char *name, const char *password) {
+void add_user(const char *name, const char *password, const char *role) {
+
     sem_wait(semshmid);
-    user *current = shm->head;
 
-    printf("name: %s password: %s\n", name, password);
-    while (current != NULL) {
+    user new_user = {0};
+    strncpy(new_user.name, name, TAM - 1);
+    strncpy(new_user.password, password, TAM - 1);
+    strncpy(new_user.role, role, TAM - 1);
 
-        //make a print to see value of strcmp 
-
-        printf("name: %s password: %s\n", current->name, current->password);
-
-        printf("value of strcmp name : %d\n", strcmp(current->name, name));
-        printf("value of strcmp password : %d\n", strcmp(current->name, name));
-        
-
-        if (strcmp(current->name, name) == 0 && strcmp(current->name, name)== 0) {
-            sem_post(semshmid);
-            return true;
+    // Find the next available index in the users array
+    int index = -1;
+    for (int i = 0; i < MAXUSERS; i++) {
+        if (shm->users[i].name[0] == '\0') {
+            index = i;
+            break;
         }
-        current = current->next;
-
-        
     }
+
+    if (index == -1) {
+        // Users array is full
+        fprintf(stderr, "Error: Users array is full\n");
+        return;
+    }
+
+    // Insert the new user into the users array
+    shm->users[index] = new_user;
+
     sem_post(semshmid);
-    return false;
 }
 
 void getconfig(const char *configfile) {
@@ -142,21 +179,52 @@ void getconfig(const char *configfile) {
     }
 }
 
-void printSharedMemory() {
-    // print shared memory
-    //sem_wait(semshmid);
-    printf("USERS DISPONIVEIS:\n");
-    user *aux = shm->head;
-    while (aux != NULL) {
-        printf("name: %s password: %s role: %s\n", aux->name, aux->password, aux->role);
-        aux = aux->next;
+void print_shared_memory() {
+
+    sem_wait(semshmid);
+
+    printf("Shared Memory:\n");
+
+    // Print each user in the users array
+    for (int i = 0; i < MAXUSERS; i++) {
+        if (shm->users[i].name[0] != '\0') {
+            printf("User %d: Name='%s', Password='%s', Role='%s'\n", i+1, shm->users[i].name, shm->users[i].password, shm->users[i].role);
+        }
     }
-    //sem_post(semshmid);
+
+    sem_post(semshmid);
 }
 
-void erro(char *s) {
-    perror(s);
-    exit(1);
+//TCP FUNCTIONS 
+
+int loginCheckUser(const char *name, const char *password) {
+
+    sem_wait(semshmid);
+
+    int index = -1;
+    for (int i = 0; i < MAXUSERS; i++) {
+        if (strcmp(shm->users[i].name, name) == 0 && strcmp(shm->users[i].password, password) == 0 && strcmp(shm->users[i].role, "admin") != 0) {
+            index = i;
+            printf("LOGIN FEITO\n");
+            //if user is leitor return 1 else return 2
+            if (strcmp(shm->users[i].role, "leitor") == 0) {
+                sem_post(semshmid);
+                return 1;
+            } else {
+                sem_post(semshmid);
+                return 2;
+            }
+        }
+    }
+
+    if (index == -1) {
+        // User not found
+        printf("Error: User not found\n");
+        sem_post(semshmid);
+        return 0;
+    }
+
+    sem_post(semshmid);
 }
 
 int udpConextion() {
@@ -259,14 +327,14 @@ int udpConextion() {
 
                 bufInstructions[3][strlen(bufInstructions[3]) - 1] = '\0';
 
-                if (aux == 4 && strcmp(bufInstructions[3], "leitor") == 0 || strcmp(bufInstructions[3], "escritor") == 0 || strcmp(bufInstructions[3], "admin") == 0) {
+                if (aux == 4 && strcmp(bufInstructions[3], "leitor") == 0 || strcmp(bufInstructions[3], "jornalista") == 0 || strcmp(bufInstructions[3], "admin") == 0) {
                     printf("Adicionando um novo user com o nome %s, password %s role %s\n", bufInstructions[1], bufInstructions[2], bufInstructions[3]);
                     add_user(bufInstructions[1], bufInstructions[2], bufInstructions[3]);
                     sendto(s, "User adicionado com sucesso\n", strlen("User adicionado com sucesso\n"), 0, (struct sockaddr *)&si_outra, slen);
-                    printSharedMemory();
+                    print_shared_memory();
                 } else {
                     sendto(s, "ERRO!!!\nUtilize o comando (ADD_USER) com o seguinte formato: ADD_USER {username} {password} {role}\n", strlen("ERRO!!!\nUtilize o comando (ADD_USER) com o seguinte formato: ADD_USER {username} {password} {role}\n"), 0, (struct sockaddr *)&si_outra, slen);
-                    sendto(s, "De relembrar que um user so pode ter role de leitor, escritor ou admin\n", strlen("De relembrar que um user so pode ter role de leitor, escritor ou admin\n"), 0, (struct sockaddr *)&si_outra, slen);
+                    sendto(s, "De relembrar que um user so pode ter role de leitor ou jornalista\n", strlen("De relembrar que um user so pode ter role de leitor, escritor ou admin\n"), 0, (struct sockaddr *)&si_outra, slen);
                 }
             } else if (strcmp(bufInstructions[0], "DEL") == 0) {
                 // printf("aux = %d", aux);
@@ -279,7 +347,7 @@ int udpConextion() {
                         sendto(s, "User nao encontrado\n", strlen("User nao encontrado\n"), 0, (struct sockaddr *)&si_outra, slen);
                     } else {
                         sendto(s, "User apagado\n", strlen("User apagado\n"), 0, (struct sockaddr *)&si_outra, slen);
-                        remove_user(bufInstructions[1]);
+                        delete_user(bufInstructions[1]);
                     }
 
                 } else {
@@ -289,25 +357,25 @@ int udpConextion() {
                 // printf("aux = %d\n", aux);
                 if (aux == 1) {
                     printf("Lista de users disponiveis:\n");
-                    printSharedMemory();
+                    print_shared_memory();
                     sendto(s, "USERS DISPONIVEIS: \n", strlen("USERS DISPONIVEIS: \n"), 0, (struct sockaddr *)&si_outra, slen);
                     sem_wait(semshmid);
-                    user *aux = shm->head;
-                    while (aux != NULL) {
-                        sendto(s, "NOME: ", strlen("NOME: "), 0, (struct sockaddr *)&si_outra, slen);
-                        sendto(s, aux->name, strlen(aux->name), 0, (struct sockaddr *)&si_outra, slen);
-                        sendto(s, " PASSWORD: ", strlen(" PASSWORD: "), 0, (struct sockaddr *)&si_outra, slen);
-                        sendto(s, aux->password, strlen(aux->password), 0, (struct sockaddr *)&si_outra, slen);
-                        sendto(s, " ROLE: ", strlen(" ROLE: "), 0, (struct sockaddr *)&si_outra, slen);
-                        sendto(s, aux->role, strlen(aux->role), 0, (struct sockaddr *)&si_outra, slen);
+
+                    // Print each user in the users array
+                    for (int i = 0; i < MAXUSERS; i++) {
+                    if (shm->users[i].name[0] != '\0') {
+
+                        sendto(s, "Username: ", strlen("Username: "), 0, (struct sockaddr *)&si_outra, slen);
+                        sendto(s, shm->users[i].name, strlen(shm->users[i].name), 0, (struct sockaddr *)&si_outra, slen);
+                        sendto(s, " Password: ", strlen(" Password: "), 0, (struct sockaddr *)&si_outra, slen);
+                        sendto(s, shm->users[i].password, strlen(shm->users[i].password), 0, (struct sockaddr *)&si_outra, slen);
+                        sendto(s, " Role: ", strlen(" Role: "), 0, (struct sockaddr *)&si_outra, slen);
+                        sendto(s, shm->users[i].role, strlen(shm->users[i].role), 0, (struct sockaddr *)&si_outra, slen);
+
                         sendto(s, "\n", strlen("\n"), 0, (struct sockaddr *)&si_outra, slen);
 
-                        aux = aux->next;
                     }
-
-
-                    
-
+                }
                     sem_post(semshmid);
                 } else {
                     sendto(s, "ERRO!!!\nUtilize o comando (LIST) com a seguinte formatação ---> LIST\n", strlen("ERRO!!!\nUtilize o comando (LIST) com a seguinte formatação ---> LIST\n"), 0, (struct sockaddr *)&si_outra, slen);
@@ -326,6 +394,8 @@ int udpConextion() {
                 if (aux == 1) {
                     printf("A sair do servidor\n");
 
+                    terminate();
+
                     return 0;
                 } else {
                     printf("ERRO!!!\nUtilize o comando (QUIT_SERVER) com a seguinte formatação ---> QUIT_SERVER\n");
@@ -343,6 +413,113 @@ int udpConextion() {
     close(s);
     close(sockfd);
 
+}
+
+//function to create a topico on shared memory wiht id and titulo
+
+void add_topico(char *id, char *titulo) {
+    sem_wait(semshmid);
+
+    topico new_topico = {0};
+    strncpy(new_topico.id, id, TAM - 1);
+    strncpy(new_topico.titulo, titulo, TAM - 1);
+
+    // Find the next available index in the users array
+    int index = -1;
+    for (int i = 0; i < MAXUSERS; i++) {
+        if (shm->topicos[i].id[0] == '\0') {
+            index = i;
+            break;
+        }
+    }
+
+    if (index == -1) {
+        // Users array is full
+        fprintf(stderr, "Error: Users array is full\n");
+        return;
+    }
+
+    // Insert the new user into the users array
+    shm->topicos[index] = new_topico;
+
+    printf("Topico adicionado com sucesso\n");
+
+    sem_post(semshmid);
+}
+
+void showTopicos () {
+    sem_wait(semshmid);
+
+    printf("Topicos:\n");
+
+    // Print each user in the users array
+    for (int i = 0; i < MAXUSERS; i++) {
+        if (shm->topicos[i].id[0] != '\0') {
+            printf("Topico %d: id='%s', Titulo='%s'\n", i+1, shm->topicos[i].id, shm->topicos[i].titulo);
+        }
+    }
+
+    sem_post(semshmid);
+}   
+
+void process_jornalista(int client_fd, const char *name, const char *password){
+    char buffer_rececao[BUFLEN];
+    long nread;
+    bool login = false;
+
+    while (!login) {
+
+        bzero(buffer_rececao, sizeof(buffer_rececao));
+        nread = read(client_fd, buffer_rececao, sizeof(buffer_rececao));
+
+        printf("buffer rececao: %s\n", buffer_rececao);
+
+        if (strncmp("LIST", buffer_rececao, strlen("LIST")) == 0){
+            printf("OPCAO LISTAR\n");
+            write(client_fd, "AINDA NAO FUNCIONA", sizeof("AINDA NAO FUNCIONA"));
+
+        }else if (strncmp("SUBS", buffer_rececao, strlen("SUBS")) == 0){
+            printf("OPCAO SUBSCREVER\n");
+            write(client_fd, "AINDA NAO FUNCIONA", sizeof("AINDA NAO FUNCIONA"));
+
+        }else if (strncmp("CRT", buffer_rececao, strlen("CRT")) == 0){
+            printf("CRIAR TOPICO\n");
+            
+            char idTopico[1024];
+            char tituloTopico[1024];
+
+            bzero(idTopico, sizeof(idTopico));
+            nread = read(client_fd, buffer_rececao, sizeof(buffer_rececao));
+            strcpy(idTopico, buffer_rececao);
+            bzero(buffer_rececao, sizeof(buffer_rececao));
+
+            printf("ID: %s\n", idTopico);
+
+            bzero(tituloTopico, sizeof(tituloTopico));
+            nread = read(client_fd, buffer_rececao, sizeof(buffer_rececao));
+            strcpy(tituloTopico, buffer_rececao);
+            bzero(buffer_rececao, sizeof(buffer_rececao));
+
+            printf("TITULO: %s\n", tituloTopico);
+
+            add_topico(idTopico, tituloTopico);
+
+            showTopicos();
+
+
+        }else if (strncmp("SND", buffer_rececao, strlen("SND")) == 0){
+            printf("ENVIAR NOTICIA\n");
+            write(client_fd, "AINDA NAO FUNCIONA", sizeof("AINDA NAO FUNCIONA"));
+            
+        }else if (strncmp("EXIT", buffer_rececao, strlen("EXIT")) == 0){
+            login = true;
+        }
+
+        //clean option
+        
+
+
+    }
 }
 
 void process_client(int client_fd)
@@ -369,16 +546,21 @@ void process_client(int client_fd)
         //print name and password
 
         printf("User name %s with password %s\n", name, password);
-
-        if(loginCheckUser(name, password)){
+        int role = loginCheckUser(name, password);
+        if(role == 1){
             printf("LOGIN FEITO!\n");
-            write(client_fd, "LOGIN BEM SUCEDIDO", sizeof("LOGIN BEM SUCEDIDO"));
+            write(client_fd, "leitor", sizeof("leitor"));
             break;
-        } 
-        else {
-            printf("LOGIN NAO FEITO!\n");
-            printSharedMemory();
-            write(client_fd, "LOGIN MAL SUCEDIDO", sizeof("LOGIN MAL SUCEDIDO"));
+            }else if(role == 2){
+                printf("LOGIN FEITO!\n");
+                write(client_fd, "jornalista", sizeof("jornalista"));
+                process_jornalista(client_fd, name, password);
+                break;
+            } 
+            else if (role == 0){
+                printf("LOGIN NAO FEITO!\n");
+                print_shared_memory();
+                write(client_fd, "LOGIN MAL SUCEDIDO", sizeof("LOGIN MAL SUCEDIDO"));
         }
     }
 }
@@ -420,7 +602,7 @@ void tcpConextion(){
 
     }
 
-} 
+}
 
 int main(int argc, char *argv[]) {
 
@@ -445,8 +627,8 @@ int main(int argc, char *argv[]) {
     sem_unlink("SEM_SHM");
     semshmid = sem_open("SEM_SHM", O_CREAT, 0777, 1);
 
-        // init shared memory
-    if ((shmid = shmget(IPC_PRIVATE, sizeof(shared_memory) + sizeof(user) * 20, IPC_CREAT | 0777)) < 0) {
+    // init shared memory
+    if ((shmid = shmget(IPC_PRIVATE, sizeof(shared_memory), IPC_CREAT | 0777)) < 0) {
         perror("shmget");
         exit(1);
     }
@@ -457,6 +639,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
+
     // Inicializa o semáforo
     if ((semshmid = sem_open("SEM_SHM", O_CREAT, 0777, 1)) == SEM_FAILED) {
         perror("sem_open");
@@ -466,45 +649,21 @@ int main(int argc, char *argv[]) {
     
     getconfig("config.txt");
 
-    printSharedMemory();
-
-    
-
     if (fork () == 0) {
         udpConextion();
         exit(0);
     }
 
-    for (int i = 0; i < 1; i++) {
+    if (fork () == 0) {
+        tcpConextion();
+        exit(0);
+    }
+
+    for (int i = 0; i < 2; i++) {
         wait(NULL);
     }
 
-    // detach shared memory
-
-    if (shmdt(shm) < 0) {
-        perror("shmdt");
-        exit(1);
-    }
-
-    // remove shared memory
-
-    if (shmctl(shmid, IPC_RMID, NULL) < 0) {
-        perror("shmctl");
-        exit(1);
-    }
-
-    // remove semaphore
-
-    if (sem_close(semshmid) < 0) {
-        perror("sem_close");
-        exit(1);
-    }
-
-    if (sem_unlink("SEM_SHM") < 0) {
-        perror("sem_unlink");
-        exit(1);
-    }
-
+    terminate();
 
     return 0;
 
