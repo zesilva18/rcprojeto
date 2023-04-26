@@ -20,6 +20,9 @@
 #include <semaphore.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <sys/types.h>
+#include <netdb.h>
+#include "stdbool.h"
 
 
 //define the constants

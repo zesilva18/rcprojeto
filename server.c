@@ -8,9 +8,11 @@ int PORT_CONFIG; // colocar 9876 --concexao udp
 int PORT_NOTICIAS; //colocar 9000
 
 void add_user(const char *name, const char *password, const char *role) {
+    sem_wait(semshmid);
     user *new_user = malloc(sizeof(user));
     if (new_user == NULL) {
         fprintf(stderr, "Error: out of memory\n");
+        sem_post(semshmid);
         exit(1);
     }
     strncpy(new_user->name, name, TAM);
@@ -27,11 +29,14 @@ void add_user(const char *name, const char *password, const char *role) {
         }
         current->next = new_user;
     }
+
+    sem_post(semshmid);
 }
 
 // funtion to remove user from shared memory
 
 void remove_user(const char *name) {
+    sem_wait(semshmid);
     user *current = shm->head;
     user *previous = NULL;
     while (current != NULL) {
@@ -42,35 +47,70 @@ void remove_user(const char *name) {
                 previous->next = current->next;
             }
             free(current);
+            sem_post(semshmid);
             return;
         }
         previous = current;
         current = current->next;
     }
+    sem_post(semshmid);
 }
 
 // function to find a user name in shared memory if exist return boolean
 
 int find_user(const char *name) {
+    sem_wait(semshmid);
     user *current = shm->head;
     while (current != NULL) {
         if (strcmp(current->name, name) == 0) {
+            sem_post(semshmid);
             return 1;
         }
         current = current->next;
     }
+    sem_post(semshmid);
     return 0;
 }
 //funtion to search a user name and password, see if role == administrator and return boolean
 bool loginCheck(const char *name, const char *password) {
+    sem_wait(semshmid);
     user *current = shm->head;
     while (current != NULL) {
 
         if (strcmp(current->name, name) == 0 && strcmp(current->password, password) == 0 && strncmp(current->role, "admin", strlen("admin")) == 0) {
+            sem_post(semshmid);
             return true;
         }
         current = current->next;
     }
+    sem_post(semshmid);
+    return false;
+}
+
+bool loginCheckUser(const char *name, const char *password) {
+    sem_wait(semshmid);
+    user *current = shm->head;
+
+    printf("name: %s password: %s\n", name, password);
+    while (current != NULL) {
+
+        //make a print to see value of strcmp 
+
+        printf("name: %s password: %s\n", current->name, current->password);
+
+        printf("value of strcmp name : %d\n", strcmp(current->name, name));
+        printf("value of strcmp password : %d\n", strcmp(current->name, name));
+        
+
+        if (strcmp(current->name, name) == 0 && strcmp(current->name, name)== 0) {
+            sem_post(semshmid);
+            return true;
+        }
+        current = current->next;
+
+        
+    }
+    sem_post(semshmid);
     return false;
 }
 
@@ -87,8 +127,6 @@ void getconfig(const char *configfile) {
     }
 
     char line[MAX_LINE_LENGTH];
-    size_t len = 0;
-    ssize_t read;
 
     while (fgets(line, MAX_LINE_LENGTH, fp) != NULL) {
         char *name, *password, *role;
@@ -106,12 +144,14 @@ void getconfig(const char *configfile) {
 
 void printSharedMemory() {
     // print shared memory
+    //sem_wait(semshmid);
     printf("USERS DISPONIVEIS:\n");
     user *aux = shm->head;
     while (aux != NULL) {
         printf("name: %s password: %s role: %s\n", aux->name, aux->password, aux->role);
         aux = aux->next;
     }
+    //sem_post(semshmid);
 }
 
 void erro(char *s) {
@@ -144,12 +184,12 @@ int udpConextion() {
 
     memset(&dest_addr, 0, sizeof(dest_addr));
     dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(PORT);
+    dest_addr.sin_port = htons(PORT_CONFIG);
     inet_aton("127.0.0.1", &dest_addr.sin_addr);
 
     // Preenchimento da socket address structure
     si_minha.sin_family = AF_INET;
-    si_minha.sin_port = htons(PORT);
+    si_minha.sin_port = htons(PORT_CONFIG);
     si_minha.sin_addr.s_addr = htonl(INADDR_ANY);
 
     // Associa o socket à informação de endereço
@@ -223,6 +263,7 @@ int udpConextion() {
                     printf("Adicionando um novo user com o nome %s, password %s role %s\n", bufInstructions[1], bufInstructions[2], bufInstructions[3]);
                     add_user(bufInstructions[1], bufInstructions[2], bufInstructions[3]);
                     sendto(s, "User adicionado com sucesso\n", strlen("User adicionado com sucesso\n"), 0, (struct sockaddr *)&si_outra, slen);
+                    printSharedMemory();
                 } else {
                     sendto(s, "ERRO!!!\nUtilize o comando (ADD_USER) com o seguinte formato: ADD_USER {username} {password} {role}\n", strlen("ERRO!!!\nUtilize o comando (ADD_USER) com o seguinte formato: ADD_USER {username} {password} {role}\n"), 0, (struct sockaddr *)&si_outra, slen);
                     sendto(s, "De relembrar que um user so pode ter role de leitor, escritor ou admin\n", strlen("De relembrar que um user so pode ter role de leitor, escritor ou admin\n"), 0, (struct sockaddr *)&si_outra, slen);
@@ -247,8 +288,10 @@ int udpConextion() {
             } else if (strcmp(bufInstructions[0], "LIST\n") == 0) {
                 // printf("aux = %d\n", aux);
                 if (aux == 1) {
+                    printf("Lista de users disponiveis:\n");
+                    printSharedMemory();
                     sendto(s, "USERS DISPONIVEIS: \n", strlen("USERS DISPONIVEIS: \n"), 0, (struct sockaddr *)&si_outra, slen);
-
+                    sem_wait(semshmid);
                     user *aux = shm->head;
                     while (aux != NULL) {
                         sendto(s, "NOME: ", strlen("NOME: "), 0, (struct sockaddr *)&si_outra, slen);
@@ -261,6 +304,11 @@ int udpConextion() {
 
                         aux = aux->next;
                     }
+
+
+                    
+
+                    sem_post(semshmid);
                 } else {
                     sendto(s, "ERRO!!!\nUtilize o comando (LIST) com a seguinte formatação ---> LIST\n", strlen("ERRO!!!\nUtilize o comando (LIST) com a seguinte formatação ---> LIST\n"), 0, (struct sockaddr *)&si_outra, slen);
                 }
@@ -297,6 +345,83 @@ int udpConextion() {
 
 }
 
+void process_client(int client_fd)
+{
+
+    char buffer_rececao[BUFLEN];
+    char buffer_envio[BUFLEN];
+    char name[BUFLEN];
+    char password[BUFLEN];
+    long nread;
+
+    while (1) {
+        bzero(name, sizeof(name));
+        nread = read(client_fd, buffer_rececao, sizeof(buffer_rececao));
+        strcpy(name, buffer_rececao);
+        bzero(buffer_rececao, sizeof(buffer_rececao));
+
+        bzero(password, sizeof(password));
+        nread = read(client_fd, buffer_rececao, sizeof(buffer_rececao));
+        strcpy(password, buffer_rececao);
+        bzero(buffer_rececao, sizeof(buffer_rececao));
+
+
+        //print name and password
+
+        printf("User name %s with password %s\n", name, password);
+
+        if(loginCheckUser(name, password)){
+            printf("LOGIN FEITO!\n");
+            write(client_fd, "LOGIN BEM SUCEDIDO", sizeof("LOGIN BEM SUCEDIDO"));
+            break;
+        } 
+        else {
+            printf("LOGIN NAO FEITO!\n");
+            printSharedMemory();
+            write(client_fd, "LOGIN MAL SUCEDIDO", sizeof("LOGIN MAL SUCEDIDO"));
+        }
+    }
+}
+
+void tcpConextion(){
+
+    printf("A iniciar o servidor TCP\n");
+
+    int fd, client;
+    struct sockaddr_in addr, client_addr;
+    int client_addr_size;
+
+    bzero((void *) &addr, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(PORT_NOTICIAS);
+
+    if ( (fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        erro("na funcao socket");
+    if ( bind(fd,(struct sockaddr*)&addr,sizeof(addr)) < 0)
+        erro("na funcao bind");
+    if( listen(fd, 5) < 0)
+        erro("na funcao listen");
+    client_addr_size = sizeof(client_addr);
+    while (1) {
+        //clean finished child processes, avoiding zombies
+        //must use WNOHANG or would block whenever a child process was working
+        while(waitpid(-1,NULL,WNOHANG)>0);
+        //wait for new connection
+        client = accept(fd,(struct sockaddr *)&client_addr,(socklen_t *)&client_addr_size);
+        if (client > 0) {
+            if (fork() == 0) {
+                process_client(client);
+                close(fd);
+                exit(0);
+            }
+            close(client);
+        }
+
+    }
+
+} 
+
 int main(int argc, char *argv[]) {
 
     if (argc != 4) {
@@ -308,20 +433,17 @@ int main(int argc, char *argv[]) {
     PORT_NOTICIAS = (int) strtol(argv[1], NULL, 10);
     PORT_CONFIG = (int) strtol(argv[2], NULL, 10);
 
-    //convert argv[3] to a string 
+    //convert argv[3] to a string
 
     char *configfile = argv[3];
-
-    //print configfile
-
-    //printf("configfile: %s \n", configfile);
-
-    //check if configfile is "config.txt" if not exit
 
     if (strcmp(configfile, "config.txt") != 0) {
         printf("ficheiro de configuração invalido!\n");
         exit(1);
     }
+
+    sem_unlink("SEM_SHM");
+    semshmid = sem_open("SEM_SHM", O_CREAT, 0777, 1);
 
         // init shared memory
     if ((shmid = shmget(IPC_PRIVATE, sizeof(shared_memory) + sizeof(user) * 20, IPC_CREAT | 0777)) < 0) {
@@ -346,8 +468,46 @@ int main(int argc, char *argv[]) {
 
     printSharedMemory();
 
-    udpConextion();
+    
+
+    if (fork () == 0) {
+        udpConextion();
+        exit(0);
+    }
+
+    for (int i = 0; i < 1; i++) {
+        wait(NULL);
+    }
+
+    // detach shared memory
+
+    if (shmdt(shm) < 0) {
+        perror("shmdt");
+        exit(1);
+    }
+
+    // remove shared memory
+
+    if (shmctl(shmid, IPC_RMID, NULL) < 0) {
+        perror("shmctl");
+        exit(1);
+    }
+
+    // remove semaphore
+
+    if (sem_close(semshmid) < 0) {
+        perror("sem_close");
+        exit(1);
+    }
+
+    if (sem_unlink("SEM_SHM") < 0) {
+        perror("sem_unlink");
+        exit(1);
+    }
+
 
     return 0;
 
 }
+
+// gcc-pthread -o server server.c; ./server 9000 9876 config.txt
