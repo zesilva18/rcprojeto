@@ -2,10 +2,69 @@
 
 
 void menuLeitor(int fd) {
-    //print menu of leitor is like 
+    char buffer_rececao[BUFLEN];
+    long nread;
+
+    int option = 0;
+
+    while (option != 3){
+
+        printf("===== MENU JORNALISTA =====\n");
+        printf("1 - Listar Topicos\n");
+        printf("2 - Subscrever Topico\n");
+        printf("3 - Logout\n");
+
+        scanf("%d", &option);
+
+        if (option == 1) {
+            write(fd, "LIST", sizeof("LIST"));
+
+            bzero(buffer_rececao, sizeof(buffer_rececao));
+            nread = read(fd, buffer_rececao, sizeof(buffer_rececao));
+
+            if (strncmp(buffer_rececao, "ERRO", strlen("ERRO")) == 0) {
+                printf("Erro ao listar topicos!\n");
+            } else {
+                printf("Topicos:\n");
+                printf("%s\n", buffer_rececao);
+            }
+
+        }else if (option == 2) {
+            write(fd, "SUBS", sizeof("SUBS"));
+            //subscrever topico
+
+            printf("Insira o id do topico: ");
+
+            char idTopico[1024];
+
+            scanf("%s", idTopico);
+
+            write(fd, idTopico, sizeof(idTopico));
+
+            bzero(buffer_rececao, sizeof(buffer_rececao));
+            nread = read(fd, buffer_rececao, sizeof(buffer_rececao));
+
+            if (strncmp(buffer_rececao, "OK", strlen("OK")) == 0) {
+                printf("Subscrito com sucesso!\n");
+            } else if (strncmp(buffer_rececao, "ERRO", strlen("ERRO")) == 0) {
+                printf("Erro ao subscrever!\n");
+            }
+
+        }else if (option == 3) {
+            //logou
+            write(fd, "EXIT", sizeof("EXIT"));
+        }
+        if (option == 3) {
+            break;
+        }  
+
+    }
 }
 
 void menuJornalista(int fd) {
+    char buffer_rececao[BUFLEN];
+    long nread;
+
     int option = 0;
 
     while (option != 5){
@@ -21,9 +80,37 @@ void menuJornalista(int fd) {
 
         if (option == 1) {
             write(fd, "LIST", sizeof("LIST"));
+
+            bzero(buffer_rececao, sizeof(buffer_rececao));
+            nread = read(fd, buffer_rececao, sizeof(buffer_rececao));
+
+            if (strncmp(buffer_rececao, "ERRO", strlen("ERRO")) == 0) {
+                printf("Erro ao listar topicos!\n");
+            } else {
+                printf("Topicos:\n");
+                printf("%s\n", buffer_rececao);
+            }
+
         }else if (option == 2) {
             write(fd, "SUBS", sizeof("SUBS"));
             //subscrever topico
+
+            printf("Insira o id do topico: ");
+
+            char idTopico[1024];
+
+            scanf("%s", idTopico);
+
+            write(fd, idTopico, sizeof(idTopico));
+
+            bzero(buffer_rececao, sizeof(buffer_rececao));
+            nread = read(fd, buffer_rececao, sizeof(buffer_rececao));
+
+            if (strncmp(buffer_rececao, "OK", strlen("OK")) == 0) {
+                printf("Subscrito com sucesso!\n");
+            } else if (strncmp(buffer_rececao, "ERRO", strlen("ERRO")) == 0) {
+                printf("Erro ao subscrever!\n");
+            }
 
         }else if (option == 3) {
             write(fd, "CRT", sizeof("CRT"));
@@ -48,11 +135,54 @@ void menuJornalista(int fd) {
             printf("IDTOPICO = %s\n", idTopico);
             printf("TITULOTOPICO = %s\n", tituloTopico);
 
-            
+            bzero(buffer_rececao, sizeof(buffer_rececao));
+            nread = read(fd, buffer_rececao, sizeof(buffer_rececao));
+
+            if (strncmp(buffer_rececao, "OK", strlen("OK")) == 0) {
+                printf("Topico criado com sucesso!\n");
+            } else if (strncmp(buffer_rececao, "ID", strlen("ID")) == 0) {
+                printf("ID ja existente!\n");
+            } else if (strncmp(buffer_rececao, "ERRO", strlen("ERRO")) == 0) {
+                printf("Erro ao criar topico!\n");
+            }
 
         }else if (option == 4) {
             write(fd, "SND", sizeof("SND"));
-                //send noticia
+            printf("Insira o id do topico: ");
+
+            char idTopico[1024];
+
+            scanf("%s", idTopico);
+
+            write(fd, idTopico, sizeof(idTopico));
+
+            printf("Insira a noticia: ");
+
+            // Limpa o buffer de entrada
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF);
+
+            char noticia[1024];
+
+            fgets(noticia, sizeof(noticia), stdin);
+
+            write(fd, noticia, sizeof(noticia));
+
+            printf("IDTOPICO = %s\n", idTopico);
+            printf("NOTICIA = %s\n", noticia);
+
+
+            bzero(buffer_rececao, sizeof(buffer_rececao));
+            nread = read(fd, buffer_rececao, sizeof(buffer_rececao));
+
+
+            if (strncmp(buffer_rececao, "OK", strlen("OK")) == 0) {
+                printf("Noticia guardada!\n");
+            } else if (strncmp(buffer_rececao, "ERRO", strlen("ERRO")) == 0) {
+                printf("Erro ao inserir noticia!\n");
+            }
+
+            
         }else if (option == 5) {
             //logou
             write(fd, "EXIT", sizeof("EXIT"));
@@ -62,10 +192,6 @@ void menuJornalista(int fd) {
         }  
 
     }
-
-
-    
-
 
 }
 
@@ -123,6 +249,7 @@ void menu(int fd){
 
         if (strncmp(buffer, "leitor", strlen("leitor")) == 0) {
             printf("Login feito com sucesso como leitor!\n");
+            menuLeitor(fd);
             break;
         } else if (strncmp(buffer, "jornalista", strlen("jornalista")) == 0){
             printf("Login feito com sucesso como jornalista!\n");

@@ -23,6 +23,7 @@
 #include <sys/types.h>
 #include <netdb.h>
 #include "stdbool.h"
+#include <signal.h>
 
 
 //define the constants
@@ -45,6 +46,10 @@ typedef struct user{
 typedef struct topico{
     char id[TAM];
     char titulo[TAM];
+    //create a array with users that subscribe the topic
+    char users[MAXUSERS][TAM];
+    char noticias[MAXUSERS][TAM];
+    int endereco_Multicast;
 } topico;
 
 //create lista ligada de users 
@@ -53,6 +58,8 @@ typedef struct {
 
     user users[MAXUSERS];
     topico topicos[MAXUSERS];
+
+    bool isOnline;
 
 } shared_memory;
 

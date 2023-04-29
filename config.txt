@@ -2,3 +2,5 @@ jorge;password;admin
 manuel;zpt567;leitor
 joana;azq1212;jornalista
 jose;pass;jornalista
+ana;1234;leitor
+gameiro;1234;jornalista

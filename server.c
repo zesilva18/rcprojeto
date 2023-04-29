@@ -415,10 +415,105 @@ int udpConextion() {
 
 }
 
-//function to create a topico on shared memory wiht id and titulo
+//function to go trough array topicos, get titulos and return a char with all the titulos separete by \n
 
-void add_topico(char *id, char *titulo) {
+char *getTitulos(char *titulos) {
+
+    bool found = false;
+    titulos[0] = '\0';
+
     sem_wait(semshmid);
+
+    for (int i = 0; i < MAXUSERS; i++) {
+        if (shm->topicos[i].titulo[0] != '\0') {
+            found = true;
+            strcat(titulos, shm->topicos[i].titulo);
+            strcat(titulos, "\n");
+        }
+    }
+
+    sem_post(semshmid);
+
+    //if found is false, clean the string titulos and put a message
+
+    if (!found) {
+        strcat(titulos, "ERRO");
+    }
+
+    return titulos;
+}
+
+//create a function to receive a id and a name and add that name to the array users in topico
+
+bool subscribeTopico(char *id, const char *name) {
+
+    sem_wait(semshmid);
+
+    bool found = false;
+
+    // find id in the array of topicos and insert on topico.users array the name
+
+    for (int i = 0; i < MAXUSERS; i++) {
+        if (strcmp(shm->topicos[i].id, id) == 0) {
+            found = true;
+            for (int j = 0; j < MAXUSERS; j++) {
+                if (shm->topicos[i].users[j][0] == '\0') {
+                    strncpy(shm->topicos[i].users[j], name, TAM - 1);
+                    break;
+                }
+            }
+            break;
+        }
+    }
+
+    if (!found) {
+        printf("Error: Topic not found\n");
+    } else {
+        printf("User %s subscribed to topic %s\n", name, id);
+    }
+
+    sem_post(semshmid);
+
+    return found;
+}
+
+bool add_noticias(char *id, char *noticias) {
+    
+        bool found = false;
+    
+        sem_wait(semshmid);
+    
+        // find id in the array and put noticias in the array noticias
+
+        for (int i = 0; i < MAXUSERS; i++) {
+        if (strcmp(shm->topicos[i].id, id) == 0) {
+            found = true;
+            for (int j = 0; j < MAXUSERS; j++) {
+                if (shm->topicos[i].noticias[j][0] == '\0') {
+                    strncpy(shm->topicos[i].noticias[j], noticias, TAM - 1);
+                    break;
+                }
+            }
+            break;
+        }
+    }
+
+    if (!found) {
+        printf("Error: Topic not found\n");
+    } else {
+        printf("New noticie %s to topic %s\n", noticias, id);
+    }
+
+    
+        sem_post(semshmid);
+    
+        return found;
+}
+
+int add_topico(char *id, char *titulo) {
+    sem_wait(semshmid);
+
+    bool found = false;
 
     topico new_topico = {0};
     strncpy(new_topico.id, id, TAM - 1);
@@ -427,6 +522,12 @@ void add_topico(char *id, char *titulo) {
     // Find the next available index in the users array
     int index = -1;
     for (int i = 0; i < MAXUSERS; i++) {
+
+        //check if the id is already in the array
+        if (strcmp(shm->topicos[i].id, id) == 0) {
+            found = true;
+            break;
+        }
         if (shm->topicos[i].id[0] == '\0') {
             index = i;
             break;
@@ -436,26 +537,54 @@ void add_topico(char *id, char *titulo) {
     if (index == -1) {
         // Users array is full
         fprintf(stderr, "Error: Users array is full\n");
-        return;
+        return 0;
     }
 
-    // Insert the new user into the users array
-    shm->topicos[index] = new_topico;
+    if (found) {
+        printf("Error: Topic already exists\n");
+        sem_post(semshmid);
+        return 1;
+    } else {
+        printf("Topic %s added\n", id);
 
-    printf("Topico adicionado com sucesso\n");
+        shm->topicos[index] = new_topico;
 
-    sem_post(semshmid);
+        printf("Topico adicionado com sucesso\n");
+
+        sem_post(semshmid);
+
+        return 2;
+    }
+
+    
 }
 
 void showTopicos () {
     sem_wait(semshmid);
 
-    printf("Topicos:\n");
+    // print for each topico the id and the titulo and al users subscribed to that topico
 
-    // Print each user in the users array
     for (int i = 0; i < MAXUSERS; i++) {
         if (shm->topicos[i].id[0] != '\0') {
-            printf("Topico %d: id='%s', Titulo='%s'\n", i+1, shm->topicos[i].id, shm->topicos[i].titulo);
+
+            printf("ID: %s\n", shm->topicos[i].id);
+            printf("Titulo: %s\n", shm->topicos[i].titulo);
+
+            printf("Users:\n");
+            for (int j = 0; j < MAXUSERS; j++) {
+                if (shm->topicos[i].users[j][0] != '\0') {
+                    printf("%s\n", shm->topicos[i].users[j]);
+                }
+            }
+
+            printf("Noticias:\n");
+            for (int j = 0; j < MAXUSERS; j++) {
+                if (shm->topicos[i].noticias[j][0] != '\0') {
+                    printf("%s\n", shm->topicos[i].noticias[j]);
+                }
+            }
+
+            printf("\n");
         }
     }
 
@@ -467,6 +596,8 @@ void process_jornalista(int client_fd, const char *name, const char *password){
     long nread;
     bool login = false;
 
+    printf("Jornalista %s logged in\n", name);
+
     while (!login) {
 
         bzero(buffer_rececao, sizeof(buffer_rececao));
@@ -476,17 +607,43 @@ void process_jornalista(int client_fd, const char *name, const char *password){
 
         if (strncmp("LIST", buffer_rececao, strlen("LIST")) == 0){
             printf("OPCAO LISTAR\n");
-            write(client_fd, "AINDA NAO FUNCIONA", sizeof("AINDA NAO FUNCIONA"));
 
+            char *titulos = malloc(sizeof(char) * 1024);
+
+            titulos = getTitulos(titulos);
+
+            //print the titulos
+
+            printf("%s", titulos);
+
+            write(client_fd, titulos, strlen(titulos));
+
+            showTopicos();
+
+            free(titulos);
+            
         }else if (strncmp("SUBS", buffer_rececao, strlen("SUBS")) == 0){
             printf("OPCAO SUBSCREVER\n");
-            write(client_fd, "AINDA NAO FUNCIONA", sizeof("AINDA NAO FUNCIONA"));
+            char idTopico[1024];
+
+            bzero(idTopico, sizeof(idTopico));
+            nread = read(client_fd, buffer_rececao, sizeof(buffer_rececao));
+            strcpy(idTopico, buffer_rececao);
+            bzero(buffer_rececao, sizeof(buffer_rececao));
+
+            if(subscribeTopico(idTopico, name)) {
+                write(client_fd, "OK", sizeof("OK"));
+                showTopicos();
+            } else {
+                write(client_fd, "ERRO", sizeof("ERRO"));
+            }
 
         }else if (strncmp("CRT", buffer_rececao, strlen("CRT")) == 0){
             printf("CRIAR TOPICO\n");
             
             char idTopico[1024];
             char tituloTopico[1024];
+            int valido = 0;
 
             bzero(idTopico, sizeof(idTopico));
             nread = read(client_fd, buffer_rececao, sizeof(buffer_rececao));
@@ -502,24 +659,104 @@ void process_jornalista(int client_fd, const char *name, const char *password){
 
             printf("TITULO: %s\n", tituloTopico);
 
-            add_topico(idTopico, tituloTopico);
-
-            showTopicos();
-
+            if(add_topico(idTopico, tituloTopico) == 2) {
+                write(client_fd, "OK", sizeof("OK"));
+                showTopicos();
+            } else if(add_topico(idTopico, tituloTopico) == 1) {
+                write(client_fd, "ID", sizeof("ID"));
+            } else {
+                write(client_fd, "ERRO", sizeof("ERRO"));
+            }
 
         }else if (strncmp("SND", buffer_rececao, strlen("SND")) == 0){
-            printf("ENVIAR NOTICIA\n");
-            write(client_fd, "AINDA NAO FUNCIONA", sizeof("AINDA NAO FUNCIONA"));
-            
+
+            char idTopico[1024];
+            char noticias[1024];
+
+            bzero(idTopico, sizeof(idTopico));
+            nread = read(client_fd, buffer_rececao, sizeof(buffer_rececao));
+            strcpy(idTopico, buffer_rececao);
+            bzero(buffer_rececao, sizeof(buffer_rececao));
+
+            printf("ID: %s\n", idTopico);
+
+            bzero(noticias, sizeof(noticias));
+            nread = read(client_fd, buffer_rececao, sizeof(buffer_rececao));
+            strcpy(noticias, buffer_rececao);
+            bzero(buffer_rececao, sizeof(buffer_rececao));
+
+            printf("NOTICIA: %s\n", noticias);
+
+            if(add_noticias(idTopico, noticias)) {
+                write(client_fd, "OK", sizeof("OK"));
+                showTopicos();
+            } else {
+                write(client_fd, "ERRO", sizeof("ERRO"));
+                printf("Erro ao criar noticias\n");
+            }
+
         }else if (strncmp("EXIT", buffer_rececao, strlen("EXIT")) == 0){
             login = true;
         }
 
-        //clean option
-        
+    }
+}
 
+void process_leitor(int client_fd, const char *name, const char *password){
+    char buffer_rececao[BUFLEN];
+    long nread;
+    bool login = false;
+
+    printf("Leitor %s logged in\n", name);
+
+    while(!login){
+
+        bzero(buffer_rececao, sizeof(buffer_rececao));
+        nread = read(client_fd, buffer_rececao, sizeof(buffer_rececao));
+
+        printf("buffer rececao: %s\n", buffer_rececao);
+
+        if (strncmp("LIST", buffer_rececao, strlen("LIST")) == 0){
+            printf("OPCAO LISTAR\n");
+
+            char *titulos = malloc(sizeof(char) * 1024);
+
+            titulos = getTitulos(titulos);
+
+            //print the titulos
+
+            printf("%s", titulos);
+
+            write(client_fd, titulos, strlen(titulos));
+
+            showTopicos();
+
+            free(titulos);
+            
+        }
+
+        else if (strncmp("SUBS", buffer_rececao, strlen("SUBS")) == 0){
+            printf("OPCAO SUBSCREVER\n");
+            char idTopico[1024];
+
+            bzero(idTopico, sizeof(idTopico));
+            nread = read(client_fd, buffer_rececao, sizeof(buffer_rececao));
+            strcpy(idTopico, buffer_rececao);
+            bzero(buffer_rececao, sizeof(buffer_rececao));
+
+            if(subscribeTopico(idTopico, name)) {
+                write(client_fd, "OK", sizeof("OK"));
+                showTopicos();
+            } else {
+                write(client_fd, "ERRO", sizeof("ERRO"));
+            }
+
+        }else if (strncmp("EXIT", buffer_rececao, strlen("EXIT")) == 0){
+            login = true;
+        }
 
     }
+
 }
 
 void process_client(int client_fd)
@@ -669,4 +906,4 @@ int main(int argc, char *argv[]) {
 
 }
 
-// gcc-pthread -o server server.c; ./server 9000 9876 config.txt
+// gcc -o server server.c; ./server 9000 9876 config.txt
