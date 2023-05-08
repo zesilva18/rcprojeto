@@ -245,7 +245,7 @@ void menu(int fd){
         write(fd, aux_pass, sizeof(aux_pass));
 
         nread = read(fd, buffer, sizeof(buffer));
-        printf("buffer = %s\n", buffer);
+        //printf("buffer = %s\n", buffer);
 
         if (strncmp(buffer, "leitor", strlen("leitor")) == 0) {
             printf("Login feito com sucesso como leitor!\n");

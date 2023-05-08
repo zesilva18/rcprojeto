@@ -428,6 +428,9 @@ char *getTitulos(char *titulos) {
         if (shm->topicos[i].titulo[0] != '\0') {
             found = true;
             strcat(titulos, shm->topicos[i].titulo);
+            // add a id
+            strcat(titulos, " ");
+            strcat(titulos, shm->topicos[i].id);
             strcat(titulos, "\n");
         }
     }
@@ -787,6 +790,7 @@ void process_client(int client_fd)
         if(role == 1){
             printf("LOGIN FEITO!\n");
             write(client_fd, "leitor", sizeof("leitor"));
+            process_leitor(client_fd, name, password);
             break;
             }else if(role == 2){
                 printf("LOGIN FEITO!\n");
@@ -907,3 +911,4 @@ int main(int argc, char *argv[]) {
 }
 
 // gcc -o server server.c; ./server 9000 9876 config.txt
+// nc -u 127.0.0.1 
